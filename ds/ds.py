@@ -9,6 +9,7 @@ import albumentations as A
 import cv2
 import torch
 import numpy as np
+from .preprocessing import GraspRectangles, Grasp
 
 
 CURR = "/".join(__file__.split("/")[:-1])
@@ -72,7 +73,17 @@ class GAT(Dataset):
         
         img = torch.from_numpy(transformed_image).permute(-1, 0, 1).float()
         lbl = torch.from_numpy(np.array([x/W, y/W, w/W, h/W, a/180])).float()
-
+        x,y,w,h,theta = lbl.tolist()
+        
+        grs = [Grasp(np.array([y, x]), -theta / 180.0 * np.pi, w, h).as_gr]
+        gr = GraspRectangles(grs)
+        pos_img, ang_img, width_img = gr.draw((H, W))
+        cos = torch.tensor(np.cos(2 * ang_img))
+        sin = torch.tensor(np.sin(2* ang_img))
+        pos_img = torch.tensor(pos_img)
+        width_img = torch.tensor(width_img)
+        lbl = torch.stack([pos_img, cos, sin, width_img], dim=0).float()
+        
         return img, lbl, tokens
 
     @staticmethod

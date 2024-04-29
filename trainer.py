@@ -35,7 +35,6 @@ def train(epoch, net, device, train_data, optimizer, batches_per_epoch):
     # Use batches per epoch to make training on different sized datasets (cornell/jacquard) more equivalent.
     while batch_idx <= batches_per_epoch:
         for x, _, y in train_data:
-            print(x.shape, y.shape)
             batch_idx += 1
             if batch_idx >= batches_per_epoch:
                 break
@@ -46,7 +45,8 @@ def train(epoch, net, device, train_data, optimizer, batches_per_epoch):
 
             loss = lossd['loss']
 
-            if batch_idx % 100 == 0:
+            if batch_idx % 5 == 0:
+                print('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
                 logging.info('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
 
             results['loss'] += loss.item()
