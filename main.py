@@ -36,12 +36,30 @@ if __name__ == "__main__":
     parser.add_argument('--idx', type=int, default=0, help='device index')
     parser.add_argument('--epoch', type=int, default=1, help='#epoch')
 
-    parser.add_argument('--method', type=str, default='naive', help='method')
-    parser.add_argument('--txtenc', type=str, default='gpt2', help='text encoder')
-    parser.add_argument('--imgenc', type=str, default='resnet18', help='img encoder')
-    parser.add_argument('--dec', type=str, default='basev0', help='decoder')
+    # Network
+    parser.add_argument('--network', type=str, default='grconvnet3',
+                        help='Network name in inference/models')
+    parser.add_argument('--input-size', type=int, default=224,
+                        help='Input image size for the network')
+    parser.add_argument('--use-depth', type=int, default=1,
+                        help='Use Depth image for training (1/0)')
+    parser.add_argument('--use-rgb', type=int, default=1,
+                        help='Use RGB image for training (1/0)')
+    parser.add_argument('--use-dropout', type=int, default=1,
+                        help='Use dropout for training (1/0)')
+    parser.add_argument('--dropout-prob', type=float, default=0.1,
+                        help='Dropout prob for training (0-1)')
+    parser.add_argument('--channel-size', type=int, default=32,
+                        help='Internal channel size for the network')
+    parser.add_argument('--iou-threshold', type=float, default=0.25,
+                        help='Threshold for IOU matching')
     parser.add_argument('--lr', type=float, default=0.001, help='lr')
-    parser.add_argument('--log', action='store_true', help='wandb logging')
+    
+    # Training
+    parser.add_argument('--batches-per-epoch', type=int, default=1000,
+                        help='Batches per Epoch')
+    parser.add_argument('--optim', type=str, default='adam',
+                        help='Optmizer for the training. (adam or SGD)')
 
     # gpt2
     parser.add_argument('--bls', type=int, default=16, help='blocksize')

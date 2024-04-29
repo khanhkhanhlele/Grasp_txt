@@ -1,5 +1,5 @@
 from ds import get_data
-# from method import get_method
+from inference.models import get_network
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from alive_progress import alive_it
@@ -10,6 +10,60 @@ import wandb
 import json
 import hashlib
 import os
+import logging
+
+def train(epoch, net, device, train_data, optimizer, batches_per_epoch):
+    """
+    Run one training epoch
+    :param epoch: Current epoch
+    :param net: Network
+    :param device: Torch device
+    :param train_data: Training Dataset
+    :param optimizer: Optimizer
+    :param batches_per_epoch:  Data batches to train on
+    :return:  Average Losses for Epoch
+    """
+    results = {
+        'loss': 0,
+        'losses': {
+        }
+    }
+
+    net.train()
+
+    batch_idx = 0
+    # Use batches per epoch to make training on different sized datasets (cornell/jacquard) more equivalent.
+    while batch_idx <= batches_per_epoch:
+        for x, _, y in train_data:
+            print(x.shape, y.shape)
+            batch_idx += 1
+            if batch_idx >= batches_per_epoch:
+                break
+
+            xc = x.to(device)
+            yc = [yy.to(device) for yy in y]
+            lossd = net.compute_loss(xc, yc)
+
+            loss = lossd['loss']
+
+            if batch_idx % 100 == 0:
+                logging.info('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
+
+            results['loss'] += loss.item()
+            for ln, l in lossd['losses'].items():
+                if ln not in results['losses']:
+                    results['losses'][ln] = 0
+                results['losses'][ln] += l.item()
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+    results['loss'] /= batch_idx
+    for l in results['losses']:
+        results['losses'][l] /= batch_idx
+
+    return results
 
 def get_hash(args):
     args_str = json.dumps(vars(args), sort_keys=True)
@@ -41,35 +95,45 @@ def trainer(args):
     best_model_path = sv_dir + f'/best.pt'
     last_model_path = sv_dir + f'/last.pt'
 
-    # model = get_method(args).to(device)
+    input_channels = 1 * args.use_depth + 3 * args.use_rgb
+    network = get_network(args.network)
+    net = network(
+        input_channels=input_channels,
+        dropout=args.use_dropout,
+        prob=args.dropout_prob,
+        channel_size=args.channel_size
+    )
 
-    # total_params = sum(p.numel() for p in model.parameters())
-    # print(f"Total Params: {total_params}")
-    # total_train_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    # print(f"Total Trainable Params: {total_train_params}")
+    net = net.to(device)
 
-    # optimizer = Adam(model.parameters(), lr=args.lr)
-    # scheduler = CosineAnnealingLR(optimizer, len(train_ld) * args.epoch)
+    total_params = sum(p.numel() for p in net.parameters())
+    print(f"Total Params: {total_params}")
+    total_train_params = sum(p.numel() for p in net.parameters() if p.requires_grad)
+    print(f"Total Trainable Params: {total_train_params}")
+
+    optimizer = Adam(net.parameters(), lr=args.lr)
+    scheduler = CosineAnnealingLR(optimizer, len(train_ld) * args.epoch)
 
 
     # old_valid_loss = 1e26
     for epoch in range(args.epoch):
-    #     log_dict = {}
-        
-    #     # model.train()
-    #     total_loss = 0
-    #     total_iou = 0
-        for img, txt, lbl in alive_it(train_ld):
-            print(img.shape, txt.shape, lbl.shape)
-            # img = img.to(device)
-            # txt = txt.to(device)
-            # lbl = lbl.to(device)
+        log_dict = {}
+        logging.info('Beginning Epoch {:02d}'.format(epoch))
+        train_results = train(epoch, net, device, train_ld, optimizer, args.batches_per_epoch)
 
-    #         loss, output = model(img, txt, lbl)
-    #         iou = probiou(output, lbl)
-    #         optimizer.zero_grad()
-    #         loss.backward()
-    #         optimizer.step()
+        # model.train()
+        # total_loss = 0
+        # total_iou = 0
+        # for img, txt, lbl in alive_it(train_ld):
+        #     img = img.to(device)
+        #     txt = txt.to(device)
+        #     lbl = lbl.to(device)
+
+        #     loss, output = model(img, lbl)
+            # iou = probiou(output, lbl)
+            # optimizer.zero_grad()
+            # loss.backward()
+            # optimizer.step()
             
     #         scheduler.step()
             
