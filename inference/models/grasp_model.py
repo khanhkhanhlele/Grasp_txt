@@ -17,7 +17,6 @@ class GraspModel(nn.Module):
     def compute_loss(self, xc, yc):
         _, y_pos, y_cos, y_sin, y_width = torch.split(torch.stack(yc, dim=0), [1,1,1,1,1], dim=1)
         pos_pred, cos_pred, sin_pred, width_pred = self(xc)
-
         p_loss = F.smooth_l1_loss(pos_pred, y_pos)
         cos_loss = F.smooth_l1_loss(cos_pred, y_cos)
         sin_loss = F.smooth_l1_loss(sin_pred, y_sin)
