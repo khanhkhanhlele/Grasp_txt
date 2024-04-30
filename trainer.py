@@ -3,13 +3,14 @@ from src.models import get_network
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 # from metrics import probiou
-
+from transformers import CLIPVisionModel, CLIPImageProcessor, CLIPVisionConfig
 import torch
 import wandb
 import json
 import hashlib
 import os
 import logging
+from src.model import LLaVa
 
 def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batches_per_epoch):
     """
@@ -33,19 +34,15 @@ def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batche
     batch_idx = 0
     # Use batches per epoch to make training on different sized datasets (cornell/jacquard) more equivalent.
     while batch_idx <= batches_per_epoch:
-        for attn_mask, input_ids, y, image_tensor in train_data:
+        for xc, attn_mask, input_ids, y, image_tensor in train_data:
             batch_idx += 1
             if batch_idx >= batches_per_epoch:
                 break
             
-            features = vision_tower(image_tensor)
-            language_features = llava(input_ids, image_tensor, attn_mask)
-            
-            fused_features = features + language_features
-            
-            xc = fused_features
+            # features = vision_tower(image_tensor.to(device))["last_hidden_state"]
+            language_features = llava(input_ids, image_tensor.half(), attn_mask)
             yc = [yy.to(device) for yy in y]
-            lossd = net.compute_loss(xc, yc)
+            lossd = net.compute_loss(xc, yc, language_features)
 
             loss = lossd['loss']
 
@@ -80,11 +77,6 @@ def trainer(args):
     else:
         device = torch.device("cpu")
 
-    args, train_ld, valid_ld = get_data(args)
-
-    print(f"#TRAIN Batch: {len(train_ld)}")
-    print(f"#VALID Batch: {len(valid_ld)}")
-
     run_name = get_hash(args)
     
     run_dir = os.getcwd() + '/runs'
@@ -112,17 +104,34 @@ def trainer(args):
     print(f"Total Params: {total_params}")
     total_train_params = sum(p.numel() for p in net.parameters() if p.requires_grad)
     print(f"Total Trainable Params: {total_train_params}")
+    
+    vision_tower = CLIPVisionModel.from_pretrained(args.vision_tower_name)
+    vision_tower = vision_tower.to(device)
+    llava = LLaVa(args.llava_model_path)
+    
+    args, train_ld, valid_ld = get_data(args, llava.tokenizer, llava.image_processor, llava.model_config)
 
-    optimizer = Adam(net.parameters(), lr=args.lr)
+    for param in vision_tower.parameters():
+        param.requires_grad = False
+    
+    for n, p in net.named_parameters():
+        if "lora" in n:
+            p.requires_grad = True
+        else:
+            p.requires_grad = False
 
+    params = list(net.parameters()) + list(vision_tower.parameters()) + list(llava.parameters())
+    
+    optimizer = Adam(params, lr=args.lr)
 
     # old_valid_loss = 1e26
     for epoch in range(args.epoch):
         logging.info('Beginning Epoch {:02d}'.format(epoch))
-        train_results = train(epoch, net, device, train_ld, optimizer, args.batches_per_epoch)
-
+        train_results = train(epoch, net, vision_tower, llava, device, train_ld, optimizer, args.batches_per_epoch)
+        logging.info('Train Results: {}'.format(train_results))
 
         save_dict = {
-            'model_state_dict': net.state_dict()
+            'model_state_dict': net.state_dict(),
+            'llava_state_dict': llava.state_dict()
         }
         torch.save(save_dict, last_model_path)

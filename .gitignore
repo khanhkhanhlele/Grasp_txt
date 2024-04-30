@@ -1,3 +1,5 @@
 grasp-anything++/*
 checkpoints/*
 wandb/*
+
+__pycache__/*

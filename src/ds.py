@@ -2,7 +2,6 @@ from torch.utils.data import Dataset, DataLoader
 from .utils import imgaug, read_pickle
 from glob import glob
 from torch.nn.utils.rnn import pad_sequence
-from torchtext.data.utils import get_tokenizer
 
 import os
 import albumentations as A
@@ -32,13 +31,12 @@ def load_image(image_file):
 
 def load_images(image_files):
     out = []
-    for image_file in image_files:
-        image = load_image(image_file)
-        out.append(image)
+    image = load_image(image_files)
+    out.append(image)
     return out
 
-CURR = "/".join(__file__.split("/")[:-1])
-ROOT = CURR + "/src"
+CURR = "/".join(__file__.split("/")[:-2])
+ROOT = CURR + "/grasp-anything++"
 
 class GAT(Dataset):
     def __init__(self, root = ROOT, train = True, img_size = 224, tokenizer=None, processor=None, model_config=None, aug=False) -> None:
@@ -57,16 +55,12 @@ class GAT(Dataset):
         self.inss = glob(self.dir + "/grasp_instructions/*")
         self.lbls = [self.dir + f"/grasp_label/{os.path.basename(x).replace('.pkl', '')}.pt" for x in self.inss]
         self.imgs = [self.dir + f"/image/{os.path.basename(x).split('_')[0]}.jpg" for x in self.inss]
-
-        self.vocab_path = CURR + "/vocab.pkl"
-        if not os.path.exists(self.vocab_path):
-            raise ValueError(f"No Vocab Found at {self.vocab_path}")
-
+        
         self.aug = aug
         self.tr = train
         self.sz = img_size
         self.processor = processor
-
+        self.model_config = model_config
         self.tokenizer = tokenizer
     
     def __len__(self):
@@ -96,7 +90,12 @@ class GAT(Dataset):
             tokenizer_image_token(ins, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
             .unsqueeze(0)
             .cuda()
-        )
+        ) 
+        pad_seq = torch.full((1, 512-input_ids.shape[1]), 2)
+        padded_input_ids = torch.cat([pad_seq.to(input_ids.device), input_ids], dim=1).squeeze(0)
+        attn_mask = torch.zeros_like(pad_seq[0])
+        attn_mask = torch.cat([attn_mask, torch.ones_like(input_ids[0]).cpu()], dim=0)
+        attn_mask = attn_mask.to(input_ids.device)
         
         images = load_images(img_path)
         images_tensor = process_images(
@@ -119,7 +118,7 @@ class GAT(Dataset):
         width_img = torch.tensor(width_img)
         lbl = torch.stack([pos_img, cos, sin, width_img], dim=0).float()
         
-        return attn_mask, input_ids, lbl, image_tensor
+        return img, attn_mask, padded_input_ids, lbl, image_tensor
 
     @staticmethod
     def lblproc(path):
@@ -128,27 +127,30 @@ class GAT(Dataset):
         ext_data = data[quality.argmax()].tolist()
         return ext_data[1:]
 
-def get_data(args, llava_tokenizer, llava_image_processor):
+def get_data(args, llava_tokenizer, llava_image_processor, model_config):
 
-    train_ds = GAT(train=True, img_size=args.sz, aug=args.aug, tokenizer = llava_tokenizer, processor = llava_image_processor)
-    valid_ds = GAT(train=False, img_size=args.sz, aug=args.aug, tokenizer = llava_tokenizer, processor = llava_image_processor)
-
+    train_ds = GAT(train=True, img_size=args.sz, aug=args.aug, tokenizer = llava_tokenizer, processor = llava_image_processor, model_config=model_config)
+    valid_ds = GAT(train=False, img_size=args.sz, aug=args.aug, tokenizer = llava_tokenizer, processor = llava_image_processor, model_config=model_config)
+    
     def generate_batch(data_batch):
         lbl_batch = []
-        img_batch = []
         input_ids_batch = []
         image_tensor_batch = []
-        for (img, lbl, input_ids, image_tensors) in data_batch:
-            img_batch.append(img)
+        attn_masks = []
+        imgs = []
+        for (img, attn_mask, input_ids, lbl, image_tensors) in data_batch:
+            attn_masks.append(attn_mask)
             lbl_batch.append(lbl)
             input_ids_batch.append(input_ids)
             image_tensor_batch.append(image_tensors)
-            
-        img_batch = torch.stack(img_batch)
+            imgs.append(img)
+        
+        attn_masks = torch.stack(attn_masks)
         lbl_batch = torch.stack(lbl_batch)
         input_ids_batch = torch.stack(input_ids_batch)
         image_tensor_batch = torch.stack(image_tensor_batch)
-        return img_batch, input_ids_batch, lbl_batch, image_tensor_batch
+        images = torch.stack(imgs)
+        return images, attn_masks, input_ids_batch, lbl_batch, image_tensor_batch
 
     train_ld = DataLoader(train_ds, batch_size=args.bs, shuffle=True, collate_fn=generate_batch, pin_memory=args.pm)
     valid_ld = DataLoader(valid_ds, batch_size=args.bs, shuffle=True, collate_fn=generate_batch, pin_memory=args.pm)

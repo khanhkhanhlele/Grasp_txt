@@ -1,7 +1,8 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 
-from inference.models.grasp_model import GraspModel, ResidualBlock
+from src.models.grasp_model import GraspModel, ResidualBlock
 
 
 class GenerativeResnet(GraspModel):
@@ -23,11 +24,11 @@ class GenerativeResnet(GraspModel):
         self.res4 = ResidualBlock(channel_size * 4, channel_size * 4)
         self.res5 = ResidualBlock(channel_size * 4, channel_size * 4)
 
-        self.conv4 = nn.ConvTranspose2d(channel_size * 4, channel_size * 2, kernel_size=4, stride=2, padding=1,
+        self.conv4 = nn.ConvTranspose2d(channel_size * 8, channel_size * 4, kernel_size=4, stride=2, padding=1,
                                         output_padding=1)
-        self.bn4 = nn.BatchNorm2d(channel_size * 2)
+        self.bn4 = nn.BatchNorm2d(channel_size * 4)
 
-        self.conv5 = nn.ConvTranspose2d(channel_size * 2, channel_size, kernel_size=4, stride=2, padding=2,
+        self.conv5 = nn.ConvTranspose2d(channel_size * 4, channel_size, kernel_size=4, stride=2, padding=2,
                                         output_padding=1)
         self.bn5 = nn.BatchNorm2d(channel_size)
 
@@ -48,7 +49,7 @@ class GenerativeResnet(GraspModel):
             if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
                 nn.init.xavier_uniform_(m.weight, gain=1)
 
-    def forward(self, x_in):
+    def forward(self, x_in, language_features):
         x = F.relu(self.bn1(self.conv1(x_in)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
@@ -57,6 +58,7 @@ class GenerativeResnet(GraspModel):
         x = self.res3(x)
         x = self.res4(x)
         x = self.res5(x)
+        x = torch.cat([x, language_features[:, :, None, None].expand(x.size(0), language_features.size(1), x.size(2), x.size(3))], dim=1)
         x = F.relu(self.bn4(self.conv4(x)))
         x = F.relu(self.bn5(self.conv5(x)))
         x = self.conv6(x)

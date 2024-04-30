@@ -18,9 +18,8 @@ deepspeed LLaVA/llava/train/train_mem.py \
     --mm_use_im_start_end False \
     --mm_use_im_patch_token False \
     --image_aspect_ratio pad \
-    --group_by_modality_length True \
     --fp16 True \
-    --output_dir checkpoints/llava-lora-1.9 \
+    --output_dir checkpoints/llava-lora-1.11 \
     --num_train_epochs 3 \
     --per_device_train_batch_size 16 \
     --per_device_eval_batch_size 16 \

@@ -1,5 +1,4 @@
 from collections import Counter
-from torchtext.vocab import vocab, Vocab
 from alive_progress import alive_it
 
 import albumentations as A
@@ -64,15 +63,3 @@ def draw_point(img, data):
     img = cv2.drawContours(img,[box],0,(0,255,0),2)
 
     return img
-
-def build_vocab(tokens, tokenizer):
-    counter = Counter()
-    for string_ in alive_it(tokens):
-        counter.update(tokenizer(string_))
-    base_vocab = vocab(
-        ordered_dict = counter, 
-        specials=['<unk>', '<pad>', '<bos>', '<eos>'],
-        min_freq = 2, 
-    )
-    base_vocab.set_default_index(base_vocab['<unk>'])
-    return Vocab(base_vocab)

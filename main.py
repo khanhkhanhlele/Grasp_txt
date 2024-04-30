@@ -39,6 +39,9 @@ if __name__ == "__main__":
     # Network
     parser.add_argument('--network', type=str, default='grconvnet3',
                         help='Network name in inference/models')
+    parser.add_argument("--vision-tower-name", type=str, default="openai/clip-vit-large-patch14-336",
+                        help='Vision tower name in huggingface')
+    parser.add_argument('--llava-model-path', type=str, default="checkpoints/llava-lora-1.11",)
     parser.add_argument('--input-size', type=int, default=224,
                         help='Input image size for the network')
     parser.add_argument('--use-depth', type=int, default=1,
