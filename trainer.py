@@ -2,18 +2,71 @@ from src.ds import get_data
 from src.models import get_network
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
-<<<<<<< HEAD
-
-=======
->>>>>>> f52f0d360db3fbd7845691dab64f87c97cbf86fa
 # from metrics import probiou
 
+from src import evaluation
+from src.utils import post_process_output
 import torch
 import wandb
 import json
 import hashlib
 import os
 import logging
+
+
+def validate(net, device, val_data, iou_threshold):
+    """
+    Run validation.
+    :param net: Network
+    :param device: Torch device
+    :param val_data: Validation Dataset
+    :param iou_threshold: IoU threshold
+    :return: Successes, Failures and Losses
+    """
+    net.eval()
+
+    results = {
+        'correct': 0,
+        'failed': 0,
+        'loss': 0,
+        'losses': {
+
+        }
+    }
+
+    ld = len(val_data)
+
+    with torch.no_grad():
+        for x, y, didx, rot, zoom_factor in val_data:
+            xc = x.to(device)
+            yc = [yy.to(device) for yy in y]
+            lossd = net.compute_loss(xc, yc)
+
+            loss = lossd['loss']
+
+            results['loss'] += loss.item() / ld
+            for ln, l in lossd['losses'].items():
+                if ln not in results['losses']:
+                    results['losses'][ln] = 0
+                results['losses'][ln] += l.item() / ld
+
+            q_out, ang_out, w_out = post_process_output(lossd['pred']['pos'], lossd['pred']['cos'],
+                                                        lossd['pred']['sin'], lossd['pred']['width'])
+
+            s = evaluation.calculate_iou_match(q_out,
+                                               ang_out,
+                                               val_data.dataset.get_gtbb(didx, rot, zoom_factor),
+                                               no_grasps=1,
+                                               grasp_width=w_out,
+                                               threshold=iou_threshold
+                                               )
+
+            if s:
+                results['correct'] += 1
+            else:
+                results['failed'] += 1
+
+    return results
 
 def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batches_per_epoch):
     """
@@ -55,10 +108,6 @@ def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batche
 
             if batch_idx % 5 == 0:
                 print('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
-<<<<<<< HEAD
-                # logging.info('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
-=======
->>>>>>> f52f0d360db3fbd7845691dab64f87c97cbf86fa
 
             results['loss'] += loss.item()
             for ln, l in lossd['losses'].items():
@@ -136,7 +185,7 @@ def trainer(args):
 
         # Run Validation
         logging.info('Validating...')
-        test_results = validate(net, device, val_data, args.iou_threshold)
+        test_results = validate(net, device, valid_ld, args.iou_threshold)
         logging.info('%d/%d = %f' % (test_results['correct'], test_results['correct'] + test_results['failed'],
                                      test_results['correct'] / (test_results['correct'] + test_results['failed'])))
 
@@ -147,13 +196,13 @@ def trainer(args):
         #     tb.add_scalar('val_loss/' + n, l, epoch)
 
         # Save best performing network
-        iou = test_results['correct'] / (test_results['correct'] + test_results['failed'])
-        if iou > best_iou or epoch == 0 or (epoch % 10) == 0:
-            torch.save(net, os.path.join(save_folder, 'epoch_%02d_iou_%0.2f' % (epoch, iou)))
-            best_iou = iou
+        # iou = test_results['correct'] / (test_results['correct'] + test_results['failed'])
+        # if iou > best_iou or epoch == 0 or (epoch % 10) == 0:
+        #     torch.save(net, os.path.join(save_folder, 'epoch_%02d_iou_%0.2f' % (epoch, iou)))
+        #     best_iou = iou
 
 
-        save_dict = {
-            'model_state_dict': net.state_dict()
-        }
-        torch.save(save_dict, last_model_path)
+        # save_dict = {
+        #     'model_state_dict': net.state_dict()
+        # }
+        # torch.save(save_dict, last_model_path)
