@@ -19,6 +19,7 @@ from LLaVA.llava.constants import (
 import requests
 from PIL import Image
 from io import BytesIO
+import json
 
 
 def load_image(image_file):
@@ -85,16 +86,24 @@ class GAT(Dataset):
             transformed_image = transformed['image']
 
         # tokens = torch.tensor([self.vocab[token] for token in self.tokenizer(ins)], dtype=torch.long)
+        with open("dataset/train/dataset.json", "r") as f:
+            dataset = json.load(f)
+        
+        for data in dataset:
+            if img_path.split("/")[-1].split(".")[0] in data["id"]:
+                response = data["conversations"][1]["value"]
         
         input_ids = (
-            tokenizer_image_token(ins, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
+            tokenizer_image_token(ins + response, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
             .unsqueeze(0)
             .cuda()
         ) 
-        pad_seq = torch.full((1, 512-input_ids.shape[1]), 2)
-        padded_input_ids = torch.cat([pad_seq.to(input_ids.device), input_ids], dim=1).squeeze(0)
+        
+        pad_seq = torch.full((1, 511-input_ids.shape[1]), 2)
+        pad_final = torch.full((1, 1), 2)
+        padded_input_ids = torch.cat([pad_seq.to(input_ids.device), input_ids, pad_final.to(input_ids.device)], dim=1).squeeze(0)
         attn_mask = torch.zeros_like(pad_seq[0])
-        attn_mask = torch.cat([attn_mask, torch.ones_like(input_ids[0]).cpu()], dim=0)
+        attn_mask = torch.cat([attn_mask, torch.ones_like(input_ids[0]).cpu(), torch.zeros((1,))], dim=0)
         attn_mask = attn_mask.to(input_ids.device)
         
         images = load_images(img_path)

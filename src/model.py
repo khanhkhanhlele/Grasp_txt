@@ -35,9 +35,24 @@ class LLaVa(nn.Module):
             attention_mask=attn_mask,
             output_hidden_states=True,
         )
-        last_hidden_states = outputs.hidden_states[-1]
+        last_hidden_states = outputs.hidden_states[-1]     
         outputs = last_hidden_states.mean(dim=1)
         
+        # gather the vectors from the last hidden layer with indexes
+        # corresponding to the context tokens
+        stp_range_vectors = []
+        STP_indexes = (input_ids == 29911).nonzero(as_tuple=True)[1]
+        
+        baselines = []
+        for i in range(input_ids.shape[0]):
+            baselines.append((input_ids[i] != 2).nonzero(as_tuple=True)[0][0].item())
+        
+        i = 0
+        for j in range(input_ids.shape[0]):
+            stp_range_vectors.append(last_hidden_states[j, STP_indexes[i]+1-baselines[j]:STP_indexes[i+1]-baselines[j]].mean(dim=0))
+            i+=2
+        
+        outputs = torch.stack(stp_range_vectors, dim=1).T
         for layer in self.mlp:
             outputs = layer(outputs.float().to(self.mlp[0].weight.device))
         

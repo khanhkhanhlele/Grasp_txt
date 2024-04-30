@@ -1,16 +1,72 @@
 from src.ds import get_data
 from src.models import get_network
 from torch.optim import Adam
-from torch.optim.lr_scheduler import CosineAnnealingLR
 # from metrics import probiou
-from transformers import CLIPVisionModel, CLIPImageProcessor, CLIPVisionConfig
+from transformers import CLIPVisionModel
+
+from src import evaluation
+from src.utils import post_process_output
 import torch
-import wandb
 import json
 import hashlib
 import os
 import logging
 from src.model import LLaVa
+
+
+def validate(net, device, val_data, iou_threshold):
+    """
+    Run validation.
+    :param net: Network
+    :param device: Torch device
+    :param val_data: Validation Dataset
+    :param iou_threshold: IoU threshold
+    :return: Successes, Failures and Losses
+    """
+    net.eval()
+
+    results = {
+        'correct': 0,
+        'failed': 0,
+        'loss': 0,
+        'losses': {
+
+        }
+    }
+
+    ld = len(val_data)
+
+    with torch.no_grad():
+        for x, y, didx, rot, zoom_factor in val_data:
+            xc = x.to(device)
+            yc = [yy.to(device) for yy in y]
+            lossd = net.compute_loss(xc, yc)
+
+            loss = lossd['loss']
+
+            results['loss'] += loss.item() / ld
+            for ln, l in lossd['losses'].items():
+                if ln not in results['losses']:
+                    results['losses'][ln] = 0
+                results['losses'][ln] += l.item() / ld
+
+            q_out, ang_out, w_out = post_process_output(lossd['pred']['pos'], lossd['pred']['cos'],
+                                                        lossd['pred']['sin'], lossd['pred']['width'])
+
+            s = evaluation.calculate_iou_match(q_out,
+                                               ang_out,
+                                               val_data.dataset.get_gtbb(didx, rot, zoom_factor),
+                                               no_grasps=1,
+                                               grasp_width=w_out,
+                                               threshold=iou_threshold
+                                               )
+
+            if s:
+                results['correct'] += 1
+            else:
+                results['failed'] += 1
+
+    return results
 
 def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batches_per_epoch):
     """
@@ -135,3 +191,10 @@ def trainer(args):
             'llava_state_dict': llava.state_dict()
         }
         torch.save(save_dict, last_model_path)
+
+        # Run Validation
+        logging.info('Validating...')
+        test_results = validate(net, device, valid_ld, args.iou_threshold)
+        logging.info('%d/%d = %f' % (test_results['correct'], test_results['correct'] + test_results['failed'],
+                                     test_results['correct'] / (test_results['correct'] + test_results['failed'])))
+
