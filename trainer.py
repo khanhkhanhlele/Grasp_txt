@@ -11,7 +11,7 @@ import hashlib
 import os
 import logging
 
-def train(epoch, net, device, train_data, optimizer, batches_per_epoch):
+def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batches_per_epoch):
     """
     Run one training epoch
     :param epoch: Current epoch
@@ -33,12 +33,17 @@ def train(epoch, net, device, train_data, optimizer, batches_per_epoch):
     batch_idx = 0
     # Use batches per epoch to make training on different sized datasets (cornell/jacquard) more equivalent.
     while batch_idx <= batches_per_epoch:
-        for x, _, y in train_data:
+        for attn_mask, input_ids, y, image_tensor in train_data:
             batch_idx += 1
             if batch_idx >= batches_per_epoch:
                 break
-
-            xc = x.to(device)
+            
+            features = vision_tower(image_tensor)
+            language_features = llava(input_ids, image_tensor, attn_mask)
+            
+            fused_features = features + language_features
+            
+            xc = fused_features
             yc = [yy.to(device) for yy in y]
             lossd = net.compute_loss(xc, yc)
 

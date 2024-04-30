@@ -5,7 +5,7 @@
 deepspeed LLaVA/llava/train/train_mem.py \
     --deepspeed LLaVA/scripts/zero2.json \
     --lora_enable True \
-    --lora_r 256 \
+    --lora_r 128 \
     --lora_alpha 256 \
     --mm_projector_lr 2e-5 \
     --model_name_or_path liuhaotian/llava-v1.5-7b \
@@ -20,7 +20,7 @@ deepspeed LLaVA/llava/train/train_mem.py \
     --image_aspect_ratio pad \
     --group_by_modality_length True \
     --fp16 True \
-    --output_dir checkpoints/llava-lora-1.8 \
+    --output_dir checkpoints/llava-lora-1.9 \
     --num_train_epochs 3 \
     --per_device_train_batch_size 16 \
     --per_device_eval_batch_size 16 \

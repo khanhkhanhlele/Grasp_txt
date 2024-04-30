@@ -119,7 +119,7 @@ class GAT(Dataset):
         width_img = torch.tensor(width_img)
         lbl = torch.stack([pos_img, cos, sin, width_img], dim=0).float()
         
-        return img, input_ids, lbl, image_tensor, image_tensor
+        return attn_mask, input_ids, lbl, image_tensor
 
     @staticmethod
     def lblproc(path):
