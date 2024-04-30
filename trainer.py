@@ -2,7 +2,7 @@ from ds import get_data
 from inference.models import get_network
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from alive_progress import alive_it
+
 # from metrics import probiou
 
 import torch
@@ -47,7 +47,7 @@ def train(epoch, net, device, train_data, optimizer, batches_per_epoch):
 
             if batch_idx % 5 == 0:
                 print('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
-                logging.info('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
+                # logging.info('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
 
             results['loss'] += loss.item()
             for ln, l in lossd['losses'].items():
@@ -120,6 +120,29 @@ def trainer(args):
         log_dict = {}
         logging.info('Beginning Epoch {:02d}'.format(epoch))
         train_results = train(epoch, net, device, train_ld, optimizer, args.batches_per_epoch)
+        
+        # Log training losses to tensorboard
+        # tb.add_scalar('loss/train_loss', train_results['loss'], epoch)
+        # for n, l in train_results['losses'].items():
+        #     tb.add_scalar('train_loss/' + n, l, epoch)
+
+        # Run Validation
+        logging.info('Validating...')
+        test_results = validate(net, device, val_data, args.iou_threshold)
+        logging.info('%d/%d = %f' % (test_results['correct'], test_results['correct'] + test_results['failed'],
+                                     test_results['correct'] / (test_results['correct'] + test_results['failed'])))
+
+        # Log validation results to tensorbaord
+        # tb.add_scalar('loss/IOU', test_results['correct'] / (test_results['correct'] + test_results['failed']), epoch)
+        # tb.add_scalar('loss/val_loss', test_results['loss'], epoch)
+        # for n, l in test_results['losses'].items():
+        #     tb.add_scalar('val_loss/' + n, l, epoch)
+
+        # Save best performing network
+        iou = test_results['correct'] / (test_results['correct'] + test_results['failed'])
+        if iou > best_iou or epoch == 0 or (epoch % 10) == 0:
+            torch.save(net, os.path.join(save_folder, 'epoch_%02d_iou_%0.2f' % (epoch, iou)))
+            best_iou = iou
 
         # model.train()
         # total_loss = 0
