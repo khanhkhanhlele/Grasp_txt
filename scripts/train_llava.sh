@@ -5,7 +5,7 @@
 deepspeed LLaVA/llava/train/train_mem.py \
     --deepspeed LLaVA/scripts/zero2.json \
     --lora_enable True \
-    --lora_r 128 \
+    --lora_r 256 \
     --lora_alpha 256 \
     --mm_projector_lr 2e-5 \
     --model_name_or_path liuhaotian/llava-v1.5-7b \
@@ -19,11 +19,11 @@ deepspeed LLaVA/llava/train/train_mem.py \
     --mm_use_im_patch_token False \
     --image_aspect_ratio pad \
     --group_by_modality_length True \
-    --bf16 True \
-    --output_dir checkpoints/llava-lora-1.6 \
-    --num_train_epochs 2 \
-    --per_device_train_batch_size 8 \
-    --per_device_eval_batch_size 8 \
+    --fp16 True \
+    --output_dir checkpoints/llava-lora-1.8 \
+    --num_train_epochs 3 \
+    --per_device_train_batch_size 16 \
+    --per_device_eval_batch_size 16 \
     --gradient_accumulation_steps 1 \
     --save_steps 10 \
     --save_total_limit 1 \
@@ -33,7 +33,7 @@ deepspeed LLaVA/llava/train/train_mem.py \
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
     --tf32 True \
-    --model_max_length 512 \
+    --model_max_length 1024 \
     --gradient_checkpointing True \
     --dataloader_num_workers 4 \
     --lazy_preprocess True \
