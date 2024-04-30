@@ -19,11 +19,11 @@ deepspeed LLaVA/llava/train/train_mem.py \
     --mm_use_im_patch_token False \
     --image_aspect_ratio pad \
     --group_by_modality_length True \
-    --bf16 True \
-    --output_dir checkpoints/llava-lora-1.6 \
-    --num_train_epochs 2 \
-    --per_device_train_batch_size 8 \
-    --per_device_eval_batch_size 8 \
+    --fp16 True \
+    --output_dir checkpoints/llava-lora-1.9 \
+    --num_train_epochs 3 \
+    --per_device_train_batch_size 16 \
+    --per_device_eval_batch_size 16 \
     --gradient_accumulation_steps 1 \
     --save_steps 10 \
     --save_total_limit 1 \
@@ -33,7 +33,7 @@ deepspeed LLaVA/llava/train/train_mem.py \
     --lr_scheduler_type "cosine" \
     --logging_steps 1 \
     --tf32 True \
-    --model_max_length 512 \
+    --model_max_length 1024 \
     --gradient_checkpointing True \
     --dataloader_num_workers 4 \
     --lazy_preprocess True \

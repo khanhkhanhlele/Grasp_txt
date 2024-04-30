@@ -1,8 +1,11 @@
-from ds import get_data
-from inference.models import get_network
+from src.ds import get_data
+from src.models import get_network
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
+<<<<<<< HEAD
 
+=======
+>>>>>>> f52f0d360db3fbd7845691dab64f87c97cbf86fa
 # from metrics import probiou
 
 import torch
@@ -12,7 +15,7 @@ import hashlib
 import os
 import logging
 
-def train(epoch, net, device, train_data, optimizer, batches_per_epoch):
+def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batches_per_epoch):
     """
     Run one training epoch
     :param epoch: Current epoch
@@ -34,12 +37,17 @@ def train(epoch, net, device, train_data, optimizer, batches_per_epoch):
     batch_idx = 0
     # Use batches per epoch to make training on different sized datasets (cornell/jacquard) more equivalent.
     while batch_idx <= batches_per_epoch:
-        for x, _, y in train_data:
+        for attn_mask, input_ids, y, image_tensor in train_data:
             batch_idx += 1
             if batch_idx >= batches_per_epoch:
                 break
-
-            xc = x.to(device)
+            
+            features = vision_tower(image_tensor)
+            language_features = llava(input_ids, image_tensor, attn_mask)
+            
+            fused_features = features + language_features
+            
+            xc = fused_features
             yc = [yy.to(device) for yy in y]
             lossd = net.compute_loss(xc, yc)
 
@@ -47,7 +55,10 @@ def train(epoch, net, device, train_data, optimizer, batches_per_epoch):
 
             if batch_idx % 5 == 0:
                 print('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
+<<<<<<< HEAD
                 # logging.info('Epoch: {}, Batch: {}, Loss: {:0.4f}'.format(epoch, batch_idx, loss.item()))
+=======
+>>>>>>> f52f0d360db3fbd7845691dab64f87c97cbf86fa
 
             results['loss'] += loss.item()
             for ln, l in lossd['losses'].items():
@@ -92,7 +103,6 @@ def trainer(args):
     if not os.path.exists(sv_dir):
         os.mkdir(sv_dir)
     
-    best_model_path = sv_dir + f'/best.pt'
     last_model_path = sv_dir + f'/last.pt'
 
     input_channels = 1 * args.use_depth + 3 * args.use_rgb
@@ -112,12 +122,10 @@ def trainer(args):
     print(f"Total Trainable Params: {total_train_params}")
 
     optimizer = Adam(net.parameters(), lr=args.lr)
-    scheduler = CosineAnnealingLR(optimizer, len(train_ld) * args.epoch)
 
 
     # old_valid_loss = 1e26
     for epoch in range(args.epoch):
-        log_dict = {}
         logging.info('Beginning Epoch {:02d}'.format(epoch))
         train_results = train(epoch, net, device, train_ld, optimizer, args.batches_per_epoch)
         
@@ -144,63 +152,8 @@ def trainer(args):
             torch.save(net, os.path.join(save_folder, 'epoch_%02d_iou_%0.2f' % (epoch, iou)))
             best_iou = iou
 
-        # model.train()
-        # total_loss = 0
-        # total_iou = 0
-        # for img, txt, lbl in alive_it(train_ld):
-        #     img = img.to(device)
-        #     txt = txt.to(device)
-        #     lbl = lbl.to(device)
 
-        #     loss, output = model(img, lbl)
-            # iou = probiou(output, lbl)
-            # optimizer.zero_grad()
-            # loss.backward()
-            # optimizer.step()
-            
-    #         scheduler.step()
-            
-    #         total_loss += loss.item()
-    #         total_iou += iou.item()
-        
-    #     train_mean_loss = total_loss / len(train_ld)
-    #     train_miou = total_iou / len(train_ld)
-        
-    #     log_dict['train/loss'] = train_mean_loss
-    #     log_dict['train/miou'] = train_miou
-
-    #     print(f"Epoch: {epoch} - Train Loss: {train_mean_loss} - Train mIoU: {train_miou}")
-
-    #     model.eval()
-    #     with torch.no_grad():
-    #         total_loss = 0
-    #         total_iou = 0
-    #         for img, txt, lbl in alive_it(valid_ld):
-    #             img = img.to(device)
-    #             txt = txt.to(device)
-    #             lbl = lbl.to(device)
-
-    #             loss, output = model(img, txt, lbl)
-    #             iou = probiou(output, lbl)
-
-    #             total_loss += loss.item()
-    #             total_iou += iou.item()
-        
-    #     valid_mean_loss = total_loss / len(valid_ld)
-    #     valid_miou = total_iou / len(valid_ld)
-
-    #     log_dict['valid/loss'] = valid_mean_loss
-    #     log_dict['valid/miou'] = valid_miou
-
-    #     print(f"Epoch: {epoch} - Valid Loss: {valid_mean_loss} - Valid mIoU: {valid_miou}")
-
-    #     save_dict = {
-    #         'args' : args,
-    #         'model_state_dict': model.state_dict()
-    #     }
-
-    #     if valid_mean_loss < old_valid_loss:
-    #         old_valid_loss = valid_mean_loss
-            
-    #         torch.save(save_dict, best_model_path)
-    #     torch.save(save_dict, last_model_path)
+        save_dict = {
+            'model_state_dict': net.state_dict()
+        }
+        torch.save(save_dict, last_model_path)

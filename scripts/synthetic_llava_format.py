@@ -35,7 +35,7 @@ for txt_file in os.listdir("grasp-anything++/seen/txt_label"):
         print("Image not found: ", new_datapoint["image"])
         continue
     new_datapoint["conversations"] = []
-    new_datapoint["conversations"].append({"from": "human", "value": instruction})
+    new_datapoint["conversations"].append({"from": "human", "value": "<image>\n" +instruction})
     new_datapoint["conversations"].append({"from": "gpt", "value": gpt_value})
     datapoints.append(new_datapoint)
     
