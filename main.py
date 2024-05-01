@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--llava-model-path', type=str, default="checkpoints/llava-lora-1.11",)
     parser.add_argument('--input-size', type=int, default=224,
                         help='Input image size for the network')
-    parser.add_argument('--use-depth', type=int, default=1,
+    parser.add_argument('--use-depth', type=int, default=0,
                         help='Use Depth image for training (1/0)')
     parser.add_argument('--use-rgb', type=int, default=1,
                         help='Use RGB image for training (1/0)')
