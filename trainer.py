@@ -14,7 +14,7 @@ import logging
 from src.model import LLaVa
 
 
-def validate(net, device, val_data, iou_threshold):
+def validate(net, llava, device, val_data, iou_threshold):
     """
     Run validation.
     :param net: Network
@@ -35,14 +35,18 @@ def validate(net, device, val_data, iou_threshold):
     }
 
     ld = len(val_data)
-
+    counter = 0 
+    loss_avg = 0
     with torch.no_grad():
-        for x, y, didx, rot, zoom_factor in val_data:
-            xc = x.to(device)
+        for xc, attn_mask, input_ids, y, image_tensor, didx in val_data:
+            if counter > 100:
+                break
+            language_features = llava(input_ids, image_tensor.half(), attn_mask)
             yc = [yy.to(device) for yy in y]
-            lossd = net.compute_loss(xc, yc)
+            lossd = net.compute_loss(xc, yc, language_features)
 
             loss = lossd['loss']
+            loss_avg += loss.item()
 
             results['loss'] += loss.item() / ld
             for ln, l in lossd['losses'].items():
@@ -55,7 +59,7 @@ def validate(net, device, val_data, iou_threshold):
 
             s = evaluation.calculate_iou_match(q_out,
                                                ang_out,
-                                               val_data.dataset.get_gtbb(didx, rot, zoom_factor),
+                                               val_data.dataset.get_gtbb(didx, 0.0, 1.0),
                                                no_grasps=1,
                                                grasp_width=w_out,
                                                threshold=iou_threshold
@@ -65,7 +69,9 @@ def validate(net, device, val_data, iou_threshold):
                 results['correct'] += 1
             else:
                 results['failed'] += 1
-
+                
+            counter += 1
+        print('Validation Loss: {:0.4f}'.format(loss_avg / counter))
     return results
 
 def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batches_per_epoch):
@@ -90,7 +96,7 @@ def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batche
     batch_idx = 0
     # Use batches per epoch to make training on different sized datasets (cornell/jacquard) more equivalent.
     while batch_idx <= batches_per_epoch:
-        for xc, attn_mask, input_ids, y, image_tensor in train_data:
+        for xc, attn_mask, input_ids, y, image_tensor, idx in train_data:
             batch_idx += 1
             if batch_idx >= batches_per_epoch:
                 break
@@ -110,6 +116,13 @@ def train(epoch, net, vision_tower, llava, device, train_data, optimizer, batche
                 if ln not in results['losses']:
                     results['losses'][ln] = 0
                 results['losses'][ln] += l.item()
+                
+            if batch_idx % 200 == 0:
+                save_dict = {
+                    'model_state_dict': net.state_dict(),
+                    'llava_state_dict': llava.state_dict()
+                }
+                torch.save(save_dict, f"checkpoints/llava-lora-{epoch}.{batch_idx}.pt")
 
             optimizer.zero_grad()
             loss.backward()
@@ -170,31 +183,44 @@ def trainer(args):
     for param in vision_tower.parameters():
         param.requires_grad = False
     
-    for n, p in net.named_parameters():
+    for n, p in llava.named_parameters():
         if "lora" in n:
+            p.requires_grad = True
+        elif "adapter" in n:
             p.requires_grad = True
         else:
             p.requires_grad = False
+            
+            
+    if os.path.exists(args.pretrained_path):
+        print("Loading Pretrained Model")
+        pretrain_dict = torch.load(args.pretrained_path)
+        net.load_state_dict(pretrain_dict['model_state_dict'])
+        llava.load_state_dict(pretrain_dict['llava_state_dict'])
 
     params = list(net.parameters()) + list(vision_tower.parameters()) + list(llava.parameters())
     
     optimizer = Adam(params, lr=args.lr)
 
-    # old_valid_loss = 1e26
-    for epoch in range(args.epoch):
-        logging.info('Beginning Epoch {:02d}'.format(epoch))
-        train_results = train(epoch, net, vision_tower, llava, device, train_ld, optimizer, args.batches_per_epoch)
-        logging.info('Train Results: {}'.format(train_results))
+    if not args.test:
+        for epoch in range(args.epoch):
+            print('Beginning Epoch {:02d}'.format(epoch))
+            train_results = train(epoch, net, vision_tower, llava, device, train_ld, optimizer, args.batches_per_epoch)
+            print('Train Results: {}'.format(train_results))
 
-        save_dict = {
-            'model_state_dict': net.state_dict(),
-            'llava_state_dict': llava.state_dict()
-        }
-        torch.save(save_dict, last_model_path)
+            save_dict = {
+                'model_state_dict': net.state_dict(),
+                'llava_state_dict': llava.state_dict()
+            }
+            torch.save(save_dict, last_model_path)
 
-        # Run Validation
-        logging.info('Validating...')
-        test_results = validate(net, device, valid_ld, args.iou_threshold)
-        logging.info('%d/%d = %f' % (test_results['correct'], test_results['correct'] + test_results['failed'],
-                                     test_results['correct'] / (test_results['correct'] + test_results['failed'])))
-
+            # Run Validation
+            print('Validating...')
+            test_results = validate(net, llava, device, valid_ld, args.iou_threshold)
+            print('%d/%d = %f' % (test_results['correct'], test_results['correct'] + test_results['failed'],
+                                        test_results['correct'] / (test_results['correct'] + test_results['failed'])))
+    else:
+        print('Testing...')
+        test_results = validate(net, llava, device, valid_ld, args.iou_threshold)
+        print('%d/%d = %f' % (test_results['correct'], test_results['correct'] + test_results['failed'],
+                                    test_results['correct'] / (test_results['correct'] + test_results['failed'])))

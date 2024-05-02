@@ -26,7 +26,7 @@ import random
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='Grasp Detection', description='Grasp Detection')
 
-    parser.add_argument('--bs', type=int, default=32, help='batch size')
+    parser.add_argument('--bs', type=int, default=64, help='batch size')
     parser.add_argument('--wk', type=str, default=1, help='number of workers')
     parser.add_argument('--pm', action='store_true', help='pin memory')
     parser.add_argument('--sz', type=int, default=224, help='size of processed image (h, w)')
@@ -54,7 +54,7 @@ if __name__ == "__main__":
                         help='Dropout prob for training (0-1)')
     parser.add_argument('--channel-size', type=int, default=32,
                         help='Internal channel size for the network')
-    parser.add_argument('--iou-threshold', type=float, default=0.25,
+    parser.add_argument('--iou-threshold', type=float, default=0.5,
                         help='Threshold for IOU matching')
     parser.add_argument('--lr', type=float, default=0.001, help='lr')
     
@@ -63,7 +63,10 @@ if __name__ == "__main__":
                         help='Batches per Epoch')
     parser.add_argument('--optim', type=str, default='adam',
                         help='Optmizer for the training. (adam or SGD)')
-
+    
+    parser.add_argument('--pretrained_path', type=str, default='')
+    parser.add_argument('--test', action='store_true', help='test only, skipping training')
+    
     # gpt2
     parser.add_argument('--bls', type=int, default=16, help='blocksize')
     parser.add_argument('--nl', type=int, default=4, help='#layers')

@@ -18,7 +18,7 @@ class LLaVa(nn.Module):
         self.context_len = context_len
         self.model_config = model.config
         
-        self.mlp = nn.ModuleList([
+        self.adapter = nn.ModuleList([
             nn.Linear(4096, 2048),
             nn.ReLU(),
             nn.Linear(2048, 512),
@@ -26,7 +26,7 @@ class LLaVa(nn.Module):
             nn.Linear(512, 128),
         ])
         
-        self.mlp = self.mlp.to("cuda:0")
+        self.adapter = self.adapter.to("cuda:0")
         
     def forward(self, input_ids, image_tensor, attn_mask):
         outputs = self.llava(
@@ -53,7 +53,7 @@ class LLaVa(nn.Module):
             i+=2
         
         outputs = torch.stack(stp_range_vectors, dim=1).T
-        for layer in self.mlp:
-            outputs = layer(outputs.float().to(self.mlp[0].weight.device))
+        for layer in self.adapter:
+            outputs = layer(outputs.float().to(self.adapter[0].weight.device))
         
         return outputs

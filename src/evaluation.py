@@ -66,14 +66,10 @@ def calculate_iou_match(grasp_q, grasp_angle, ground_truth_bbs, no_grasps=1, gra
     :param threshold: Threshold for IOU matching. Detect with IOU ≥ threshold
     :return: success
     """
-
-    if not isinstance(ground_truth_bbs, GraspRectangles):
-        gt_bbs = GraspRectangles.load_from_array(ground_truth_bbs)
-    else:
-        gt_bbs = ground_truth_bbs
     gs = detect_grasps(grasp_q, grasp_angle, width_img=grasp_width, no_grasps=no_grasps)
+    import ipdb; ipdb.set_trace()
     for g in gs:
-        if g.max_iou(gt_bbs) > threshold:
+        if g.max_iou(ground_truth_bbs) > threshold:
             return True
     else:
         return False

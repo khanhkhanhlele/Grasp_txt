@@ -92,6 +92,8 @@ class GAT(Dataset):
         for data in dataset:
             if img_path.split("/")[-1].split(".")[0] in data["id"]:
                 response = data["conversations"][1]["value"]
+            else:
+                response = "here is the object [SPT] object name [SPT]"
         
         input_ids = (
             tokenizer_image_token(ins + response, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
@@ -115,7 +117,7 @@ class GAT(Dataset):
         image_tensor = images_tensor[0]
         
         img = torch.from_numpy(transformed_image).permute(-1, 0, 1).float()
-        lbl = torch.from_numpy(np.array([x/W, y/W, w/W, h/W, a/180])).float()
+        lbl = torch.from_numpy(np.array([x/W, y/W, w/W, h/W, a])).float()
         x,y,w,h,theta = lbl.tolist()
         
         grs = [Grasp(np.array([y, x]), -theta / 180.0 * np.pi, w, h).as_gr]
@@ -127,7 +129,27 @@ class GAT(Dataset):
         width_img = torch.tensor(width_img)
         lbl = torch.stack([pos_img, cos, sin, width_img], dim=0).float()
         
-        return img, attn_mask, padded_input_ids, lbl, image_tensor
+        return img, attn_mask, padded_input_ids, lbl, image_tensor, index
+
+    def get_gtbb(self, didx, rot=0, zoom=1):
+        grs_out = []
+        for idx in didx.cpu().numpy().tolist():
+            lbl_path = self.lbls[idx]
+            img_path = self.imgs[idx]
+            img = cv2.imread(img_path)
+            W, H, _ = img.shape
+            x, y, w, h, a = self.lblproc(lbl_path)
+            x = x / W
+            y = y / W
+            w = w / W
+            h = h / W
+            grs_out.append(Grasp(np.array([y, x]), -a / 180.0 * np.pi, w, h).as_gr)
+            
+        grs = GraspRectangles(grs_out)
+        # grs.rotate(rot, (H // 2, W // 2))
+        # grs.zoom(zoom, (H // 2, W // 2))
+        return grs
+    
 
     @staticmethod
     def lblproc(path):
@@ -139,7 +161,7 @@ class GAT(Dataset):
 def get_data(args, llava_tokenizer, llava_image_processor, model_config):
 
     train_ds = GAT(train=True, img_size=args.sz, aug=args.aug, tokenizer = llava_tokenizer, processor = llava_image_processor, model_config=model_config)
-    valid_ds = GAT(train=False, img_size=args.sz, aug=args.aug, tokenizer = llava_tokenizer, processor = llava_image_processor, model_config=model_config)
+    valid_ds = GAT(train=True, img_size=args.sz, aug=args.aug, tokenizer = llava_tokenizer, processor = llava_image_processor, model_config=model_config)
     
     def generate_batch(data_batch):
         lbl_batch = []
@@ -147,21 +169,24 @@ def get_data(args, llava_tokenizer, llava_image_processor, model_config):
         image_tensor_batch = []
         attn_masks = []
         imgs = []
-        for (img, attn_mask, input_ids, lbl, image_tensors) in data_batch:
+        idxes = []
+        for (img, attn_mask, input_ids, lbl, image_tensors, idx) in data_batch:
             attn_masks.append(attn_mask)
             lbl_batch.append(lbl)
             input_ids_batch.append(input_ids)
             image_tensor_batch.append(image_tensors)
             imgs.append(img)
+            idxes.append(idx)
         
         attn_masks = torch.stack(attn_masks)
         lbl_batch = torch.stack(lbl_batch)
         input_ids_batch = torch.stack(input_ids_batch)
         image_tensor_batch = torch.stack(image_tensor_batch)
         images = torch.stack(imgs)
-        return images, attn_masks, input_ids_batch, lbl_batch, image_tensor_batch
+        idxes = torch.tensor(idxes)
+        return images, attn_masks, input_ids_batch, lbl_batch, image_tensor_batch, idxes
 
     train_ld = DataLoader(train_ds, batch_size=args.bs, shuffle=True, collate_fn=generate_batch, pin_memory=args.pm)
-    valid_ld = DataLoader(valid_ds, batch_size=args.bs, shuffle=True, collate_fn=generate_batch, pin_memory=args.pm)
+    valid_ld = DataLoader(valid_ds, batch_size=1, shuffle=True, collate_fn=generate_batch, pin_memory=args.pm)
 
     return args, train_ld, valid_ld
