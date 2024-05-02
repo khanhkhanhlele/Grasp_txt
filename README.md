@@ -1,6 +1,7 @@
-# LLaVa-Grasp
+# Language Driven Object Grasping via Feature Augmentation
 
-This repository contains the code for the LLaVa-Grasp algorithm, which is a combination between Multi-Modal Instruction Learning Model with Grasp Detection Model.
+# Abstract 
+To address the challenge of few-shot learning in language-driven grasp detection, we introduce GraspLLaMA. This approach enhances data robustness through augmentation and leverages transfer learning to effectively train on limited datasets.
 
 ## Setup
 First, clone the LLaVa repository and install the dependencies:
@@ -10,7 +11,9 @@ cd LLaVA
 pip3 install -e .
 ```
 
-Download dataset grasp-anything++ and store it in grasp-anything++ folder
+Then run `pip install -r requirements.txt` to install the required dependencies.
+
+Download dataset[GraspAnything++](https://drive.google.com/file/d/1h2_x18WtR9N58e0O14BNbo_5AI6yWgeu/view) and store it in grasp-anything++ folder.
 
 ## Training
 
